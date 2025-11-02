@@ -1,7 +1,10 @@
 from bytetrack.byte_track import ByteTrack, STrack
 from onemetric.cv.utils.iou import box_iou_batch
 from dataclasses import dataclass
+from datetime import datetime
 
+import cv2
+import supervision as sv
 from supervision import ColorPalette
 from supervision import Point, VideoInfo, VideoSink, get_video_frames_generator
 from supervision import BoundingBoxAnnotator, LabelAnnotator, TraceAnnotator, LineZone, LineZoneAnnotator
@@ -16,7 +19,7 @@ import argparse
 class ObjectTracking:
     def __init__(self, input_video_path, output_video_path) -> None:
         # My yolo model 
-        self.model = YOLO("yolo11s.pt")
+        self.model = YOLO("model/vehicle_detector.pt")
         self.model.fuse()
         
         # dict maping class_id to class_name
