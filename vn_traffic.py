@@ -49,7 +49,7 @@ class ObjectTracking:
     #  OPTIMIZED SETTINGS
     FRAME_SKIP = 3
     LPR_FRAME_INTERVAL = 10  # Tăng từ 5 lên 10
-    ENABLE_DISPLAY = True   # TẮT hiển thị real-time
+    ENABLE_DISPLAY = False   # TẮT hiển thị real-time
     
     MAX_LPR_ATTEMPTS = 150
     CONFIRMATION_THRESHOLD = 5
@@ -250,122 +250,76 @@ class ObjectTracking:
                 if crossed_in[i]:
                     self.vehicle_counts[class_id]["in"] += 1
 
+    # =====================DÀNH CHO BIỂN SỐ VIỆT NAM=========================== 
     def _clean_ocr_text(self, ocr_result, class_id=None) -> Tuple[str, float]:
         if ocr_result is None or not ocr_result:
             return "", 0.0
         
         try:
+            # 1. Trích xuất text thô & Confidence
             text_parts = []
             conf_parts = []
-            
             if isinstance(ocr_result, list) and len(ocr_result) > 0:
                 if isinstance(ocr_result[0], list) and len(ocr_result[0]) > 0:
                     for item in ocr_result[0]:
-                        if len(item) >= 2 and isinstance(item[1], (tuple, list)) and len(item[1]) >= 2:
+                        if len(item) >= 2:
                             text, confidence = item[1][0], item[1][1]
                             if text:
                                 text_parts.append(str(text))
                                 conf_parts.append(confidence)
-                
+            
             if not text_parts:
                 return "", 0.0
             
             full_text = ''.join(text_parts)
             cleaned = re.sub(r'[^A-Z0-9]', '', full_text.upper())
             
-            corrections = {'O': '0', 'I': '1', 'L': '1', 'Z': '2', 'S': '5', 'B': '8'}
-            result = ""
-            for i, char in enumerate(cleaned):
-                if char in corrections:
-                    prev_is_digit = (i > 0 and cleaned[i-1].isdigit())
-                    next_is_digit = (i < len(cleaned)-1 and cleaned[i+1].isdigit())
-                    if prev_is_digit and next_is_digit:
-                        result += corrections[char]
-                    else:
-                        result += char
-                else:
-                    result += char
+            if len(cleaned) < 6: 
+                return "", 0.0
+
             
+            # Định nghĩa từ điển sửa lỗi
+            dict_char_to_int = {'O': '0', 'I': '1', 'L': '1', 'Z': '2', 'S': '5', 'B': '8', 'D': '0', 'G': '6'}
+            dict_int_to_char = {'0': 'D', '1': 'I', '2': 'Z', '5': 'S', '8': 'B', '4': 'A', '6': 'G'}
+            
+            text_list = list(cleaned)
+            
+            
+            for i in [0, 1]:
+                if i < len(text_list) and text_list[i] in dict_char_to_int:
+                    text_list[i] = dict_char_to_int[text_list[i]]
+            
+            for i in range(len(text_list) - 4, len(text_list)):
+                if i >= 0 and text_list[i] in dict_char_to_int:
+                    text_list[i] = dict_char_to_int[text_list[i]]
+
+            CAR_IDS = [2, 5, 7]
+            MOTOR_IDS = [3]     
+            
+            if class_id in CAR_IDS:
+                if len(text_list) > 2 and text_list[2] in dict_int_to_char:
+                    text_list[2] = dict_int_to_char[text_list[2]]
+                
+                if 3 < len(text_list) and text_list[3] in dict_char_to_int:
+                    text_list[3] = dict_char_to_int[text_list[3]]
+
+            elif class_id in MOTOR_IDS:
+                if len(text_list) > 2 and text_list[2] in dict_int_to_char:
+                    text_list[2] = dict_int_to_char[text_list[2]]
+                
+                pass 
+
+            final_text = "".join(text_list)
             avg_conf = sum(conf_parts) / len(conf_parts) if conf_parts else 0.0
             
             if avg_conf < self.OCR_CONFIDENCE_THRESHOLD:
                 return "", 0.0
 
-            return cleaned, avg_conf
-            
+            return final_text, avg_conf
+        
         except Exception as e:
+            print(f"[Text Clean Error] {e}")
             return "", 0.0
-
-    # =====================DÀNH CHO BIỂN SỐ VIỆT NAM=========================== 
-    # def _clean_ocr_text(self, ocr_result, class_id=None) -> Tuple[str, float]:
-    #     if ocr_result is None or not ocr_result:
-    #         return "", 0.0
-        
-    #     try:
-    #         # 1. Trích xuất text thô & Confidence
-    #         text_parts = []
-    #         conf_parts = []
-    #         if isinstance(ocr_result, list) and len(ocr_result) > 0:
-    #             if isinstance(ocr_result[0], list) and len(ocr_result[0]) > 0:
-    #                 for item in ocr_result[0]:
-    #                     if len(item) >= 2:
-    #                         text, confidence = item[1][0], item[1][1]
-    #                         if text:
-    #                             text_parts.append(str(text))
-    #                             conf_parts.append(confidence)
-            
-    #         if not text_parts:
-    #             return "", 0.0
-            
-    #         full_text = ''.join(text_parts)
-    #         cleaned = re.sub(r'[^A-Z0-9]', '', full_text.upper())
-            
-    #         if len(cleaned) < 6: 
-    #             return "", 0.0
-
-            
-    #         # Định nghĩa từ điển sửa lỗi
-    #         dict_char_to_int = {'O': '0', 'I': '1', 'L': '1', 'Z': '2', 'S': '5', 'B': '8', 'D': '0', 'G': '6'}
-    #         dict_int_to_char = {'0': 'D', '1': 'I', '2': 'Z', '5': 'S', '8': 'B', '4': 'A', '6': 'G'}
-            
-    #         text_list = list(cleaned)
-            
-            
-    #         for i in [0, 1]:
-    #             if i < len(text_list) and text_list[i] in dict_char_to_int:
-    #                 text_list[i] = dict_char_to_int[text_list[i]]
-            
-    #         for i in range(len(text_list) - 4, len(text_list)):
-    #             if i >= 0 and text_list[i] in dict_char_to_int:
-    #                 text_list[i] = dict_char_to_int[text_list[i]]
-
-    #         CAR_IDS = [2, 5, 7]
-    #         MOTOR_IDS = [3]     
-            
-    #         if class_id in CAR_IDS:
-    #             if len(text_list) > 2 and text_list[2] in dict_int_to_char:
-    #                 text_list[2] = dict_int_to_char[text_list[2]]
-                
-    #             if 3 < len(text_list) and text_list[3] in dict_char_to_int:
-    #                 text_list[3] = dict_char_to_int[text_list[3]]
-
-    #         elif class_id in MOTOR_IDS:
-    #             if len(text_list) > 2 and text_list[2] in dict_int_to_char:
-    #                 text_list[2] = dict_int_to_char[text_list[2]]
-                
-    #             pass 
-
-    #         final_text = "".join(text_list)
-    #         avg_conf = sum(conf_parts) / len(conf_parts) if conf_parts else 0.0
-            
-    #         if avg_conf < self.OCR_CONFIDENCE_THRESHOLD:
-    #             return "", 0.0
-
-    #         return final_text, avg_conf
-        
-    #     except Exception as e:
-    #         print(f"[Text Clean Error] {e}")
-    #         return "", 0.0
 
     def _should_process_lpr(self, tracker_id: int, frame_index: int) -> bool:
         if tracker_id in self.confirmed_plates:
@@ -590,19 +544,6 @@ class ObjectTracking:
         
         return frame
 
-    def callback(self, frame: np.ndarray, index: int) -> np.ndarray:
-        self.current_frame_lp_detections = sv.Detections.empty()
-        
-        # Process OCR results từ queue
-        self._process_ocr_results()
-        
-        detections = self._detect_vehicles(frame)
-        tracked_detections = self.byte_tracker.update_with_detections(detections)
-        self._update_counts(tracked_detections)
-        self._process_lpr(frame, tracked_detections, index)
-        
-        annotated_frame = self._annotate_frame(frame.copy(), tracked_detections, index)
-        return annotated_frame
 
     def process(self):
         """

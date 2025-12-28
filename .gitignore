@@ -163,3 +163,5 @@ cython_debug/
 yolo
 bytrack-yolo/
 bytetrack/__pycache__
+model/*.pt
+assets/
