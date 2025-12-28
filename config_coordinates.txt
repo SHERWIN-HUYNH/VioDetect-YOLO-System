@@ -1,0 +1,23 @@
+# =======================================================
+# TỌA ĐỘ CHO VEHICLE COUNTING SYSTEM (4K)
+# Ảnh gốc: extracted_frames/frame_00030.png
+# Độ phân giải: 1920x1080
+# Ngày tạo: 2025-12-27 14:38:27
+# =======================================================
+
+# Vạch đếm xe (LineZone)
+LINE_START = sv.Point(259, 733)
+LINE_END = sv.Point(1896, 982)
+
+# Vùng nhận diện biển số (PolygonZone)
+lpr_zone = np.array([
+    [1908, 600],
+], dtype=np.int32)
+
+
+# -------------------------------------------------------
+# Tất cả tọa độ (backup)
+# -------------------------------------------------------
+LINE_START = (259, 733)
+LINE_END = (1896, 982)
+ZONE_P1 = (1908, 600)

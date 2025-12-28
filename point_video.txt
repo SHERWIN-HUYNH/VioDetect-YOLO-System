@@ -1,0 +1,13 @@
+vn_traffic_shorter 
+LINE_START: sv.Point = field(default_factory=lambda: sv.Point(1170, 891))
+LINE_END: sv.Point = field(default_factory=lambda: sv.Point(1800, 2151))
+polygon = np.array([
+            [1170, 891],    
+            [3576, 624],   
+            [3828, 1413],   
+            [1800, 2151]    
+        ])
+
+
+vehicle-counting 
+

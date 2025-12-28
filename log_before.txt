@@ -1,0 +1,41 @@
+[2025-12-24 12:45:10] - Processing Complete
+============================================================
+
+=== PROCESSING STATISTICS ===
+Total Frames Processed: 952
+Total Duration: 96.47s
+Average FPS: 9.87
+Real-time Ratio: 32.9%
+
+=== VEHICLE COUNTS ===
+CAR: OUT=0, IN=1
+MOTORCYCLE: OUT=17, IN=24
+BUS: OUT=0, IN=0
+TRUCK: OUT=0, IN=0
+----------------------------------------
+TOTAL: OUT=17, IN=25
+
+=== LPR STATISTICS ===
+Total YOLO-LP Detections (Events): 50
+Total OCR Attempts (Queue): 1522
+Total Successful OCR Reads: 11
+Total Plates Confirmed: 8
+
+=== DETECTED PLATES ===
+Vehicle #7: 51K34971 [CONFIRMED] (Attempts: 31, Candidates: 3)
+Vehicle #22: 59D717065 [UNVERIFIED] (Attempts: 38, Candidates: 3)
+Vehicle #45: 54H37728 [CONFIRMED] (Attempts: 29, Candidates: 5)
+Vehicle #54: 59F234290 [CONFIRMED] (Attempts: 56, Candidates: 11)
+Vehicle #58: 59X186780 [CONFIRMED] (Attempts: 46, Candidates: 20)
+Vehicle #71: 54I24466 [CONFIRMED] (Attempts: 30, Candidates: 4)
+Vehicle #85: 59M186780 [UNVERIFIED] (Attempts: 13, Candidates: 13)
+Vehicle #99: 5474466 [UNVERIFIED] (Attempts: 16, Candidates: 1)
+Vehicle #116: 61F64491 [CONFIRMED] (Attempts: 17, Candidates: 12)
+Vehicle #155: 71E00100 [CONFIRMED] (Attempts: 16, Candidates: 7)
+Vehicle #175: 59788787 [CONFIRMED] (Attempts: 10, Candidates: 5)
+
+Total plates detected: 11
+├── Confirmed: 8
+└── Unverified: 3
+
+============================================================

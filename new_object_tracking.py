@@ -21,10 +21,10 @@ class ObjectTracking:
     VEHICLE_CONF_THRESHOLD = 0.3
     
     # LP detection threshold
-    LP_CONF_THRESHOLD = 0.4
+    LP_CONF_THRESHOLD = 0.3
     
     # OCR configuration
-    OCR_CONFIDENCE_THRESHOLD = 0.5
+    OCR_CONFIDENCE_THRESHOLD = 0.1
     
     # LineZone configuration - Single line for counting OUT
     LINE_START = sv.Point(50, 1500)
@@ -45,8 +45,8 @@ class ObjectTracking:
     
     # Performance optimization
     FRAME_SKIP = 1  # Process every frame
-    LPR_FRAME_INTERVAL = 5  # Run LPR every 5 frames per vehicle
-    MAX_LPR_ATTEMPTS = 3  # Max attempts to read plate per vehicle
+    LPR_FRAME_INTERVAL = 3  # Run LPR every 5 frames per vehicle
+    MAX_LPR_ATTEMPTS = 10   # Max attempts to read plate per vehicle
 
     
     def __init__(self, vehicle_model_path, lp_model_path, input_video_path, output_video_path, log_file_path):
@@ -66,6 +66,8 @@ class ObjectTracking:
         self.lpr_attempts: Dict[int, int] = {}
         self.last_lpr_frame: Dict[int, int] = {}
         self.plate_candidates: Dict[int, List[str]] = {}
+        # NEW: Store box coordinates for final license plates
+        self.lp_boxes: Dict[int, np.ndarray] = {}
         
         self.vehicle_counts = {
             class_id: {"name": self.CLASS_NAMES_DICT[class_id], "out": 0}
@@ -136,6 +138,18 @@ class ObjectTracking:
             text_scale=self.TEXT_SCALE,
             color=sv.Color.RED
         )
+        
+        # --- NEW: Annotators for License Plates ---
+        self.lp_box_annotator = sv.BoundingBoxAnnotator(
+            thickness=self.BOX_THICKNESS,
+            color=sv.Color.GREEN
+        )
+        self.lp_label_annotator = sv.LabelAnnotator(
+            text_thickness=self.TEXT_THICKNESS, 
+            text_scale=self.TEXT_SCALE,
+            text_color=sv.Color.WHITE
+            # text_background_color=sv.Color.GREEN
+        )
 
     def _detect_vehicles(self, frame: np.ndarray) -> sv.Detections:
         """Detect vehicles using YOLO model."""
@@ -171,57 +185,86 @@ class ObjectTracking:
             gray = plate_img
         
         h, w = gray.shape
-        if h < 50 or w < 100:
-            scale = max(50/h, 100/w)
+        # Resize nếu quá nhỏ (tăng scale factor)
+        if h < 60 or w < 150:
+            scale = max(60/h, 150/w) * 2  # Tăng gấp đôi
             new_w, new_h = int(w * scale), int(h * scale)
-            gray = cv2.resize(gray, (new_w, new_h))
+            gray = cv2.resize(gray, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
+            print(f"    [PREPROCESS] Resized from {w}x{h} to {new_w}x{new_h}")
         
+        # Tăng contrast
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+        enhanced = clahe.apply(gray)
+        
+        # Denoise
+        denoised = cv2.fastNlMeansDenoising(enhanced, h=10)
+        
+        # Adaptive threshold
         binary = cv2.adaptiveThreshold(
-            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+            denoised, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
             cv2.THRESH_BINARY, 11, 2
         )
         
-        denoised = cv2.fastNlMeansDenoising(binary)
-        return denoised
+        return binary
 
     def _clean_ocr_text(self, ocr_result) -> str:
-        """Extract and clean text from PaddleOCR results with robust error handling."""
+        """
+        Extract and clean text from PaddleOCR results.
+        Handles list[dict] structure from ocr.ocr() and other formats.
+        """
         if ocr_result is None or not ocr_result:
             return ""
         
         try:
             text_parts = []
             
-            if isinstance(ocr_result, list):
-                if len(ocr_result) == 0:
-                    return ""
+            if isinstance(ocr_result, list) and len(ocr_result) > 0:
                 
-                # Format: [[bbox, (text, confidence)], ...]
-                if isinstance(ocr_result[0], list):
+                # --- FIXED: Handle list[dict] structure from self.ocr.ocr() ---
+                if isinstance(ocr_result[0], dict) and \
+                   'rec_texts' in ocr_result[0] and \
+                   'rec_scores' in ocr_result[0]:
+                    
+                    print("    [OCR DEBUG] Parsing list[dict] format (from self.ocr.ocr).")
+                    for result_dict in ocr_result: # Lặp qua mỗi dict trong list
+                        if result_dict.get('rec_texts') is None or result_dict.get('rec_scores') is None:
+                            continue
+                        
+                        # Lặp qua các text và score bên trong dict đó
+                        for text, confidence in zip(result_dict['rec_texts'], result_dict['rec_scores']):
+                            print(f"    [OCR DEBUG] Found text: '{text}', Conf: {confidence:.2f}")
+                            if text and confidence > self.OCR_CONFIDENCE_THRESHOLD:
+                                text_parts.append(str(text))
+                
+                # --- Fallback: Handle OCRResult object structure ---
+                elif hasattr(ocr_result[0], 'rec_texts') and hasattr(ocr_result[0], 'rec_scores'):
+                    print("    [OCR DEBUG] Parsing new OCRResult object format.")
+                    for result_object in ocr_result:
+                        if result_object.rec_texts is None or result_object.rec_scores is None:
+                            continue
+                        for text, confidence in zip(result_object.rec_texts, result_object.rec_scores):
+                            print(f"    [OCR DEBUG] Found char: '{text}', Conf: {confidence:.2f}")
+                            if text and confidence > self.OCR_CONFIDENCE_THRESHOLD:
+                                text_parts.append(str(text))
+                
+                # --- Fallback: Old list format ---
+                elif isinstance(ocr_result[0], list):
+                    print("    [OCR DEBUG] Parsing old [[bbox, (text, conf)]] format.")
                     for item in ocr_result[0]:
                         if len(item) >= 2 and isinstance(item[1], (tuple, list)) and len(item[1]) >= 2:
                             text, confidence = item[1][0], item[1][1]
+                            print(f"    [OCR DEBUG] Found char: '{text}', Conf: {confidence:.2f}")
                             if text and confidence > self.OCR_CONFIDENCE_THRESHOLD:
                                 text_parts.append(str(text))
-                
-                # Format: [(text, confidence), ...]
-                elif isinstance(ocr_result[0], (tuple, list)) and len(ocr_result[0]) >= 2:
-                    for item in ocr_result:
-                        if len(item) >= 2:
-                            text, confidence = item[0], item[1]
-                            if text and confidence > self.OCR_CONFIDENCE_THRESHOLD:
-                                text_parts.append(str(text))
-                
-                # Format: Direct text list
-                elif isinstance(ocr_result[0], str):
-                    text_parts = [str(item) for item in ocr_result]
             
             elif isinstance(ocr_result, str):
                 text_parts = [ocr_result]
             
             if not text_parts:
+                print("    [OCR DEBUG] No text parts passed threshold or format not recognized.")
                 return ""
             
+            # --- Post-processing ---
             text = ''.join(text_parts)
             text = re.sub(r'[^A-Z0-9]', '', text.upper())
             
@@ -231,7 +274,10 @@ class ObjectTracking:
             
             return text
             
-        except Exception:
+        except Exception as e:
+            print(f"    [OCR CLEAN ERROR] Exception: {e}")
+            import traceback
+            traceback.print_exc()
             return ""
 
     def _get_consensus_plate(self, tracker_id: int) -> Optional[str]:
@@ -246,19 +292,23 @@ class ObjectTracking:
         counter = Counter(candidates)
         most_common = counter.most_common(1)[0]
         
-        if most_common[1] >= 2 or len(most_common[0]) >= 6:
+        # Need at least 2 readings, or one very long reading
+        if most_common[1] >= 2 or (len(most_common[0]) >= 6 and most_common[1] >= 1):
             return most_common[0]
         
         return None
 
     def _should_process_lpr(self, tracker_id: int, frame_index: int) -> bool:
         """Determine if LPR should be processed for this vehicle."""
+        # Don't process if plate is already confirmed
         if tracker_id in self.plate_texts:
             return False
         
+        # Don't process if max attempts reached
         if self.lpr_attempts.get(tracker_id, 0) >= self.MAX_LPR_ATTEMPTS:
             return False
         
+        # Don't process if recently processed
         last_frame = self.last_lpr_frame.get(tracker_id, -999)
         if frame_index - last_frame < self.LPR_FRAME_INTERVAL:
             return False
@@ -270,7 +320,6 @@ class ObjectTracking:
         if tracked_detections.tracker_id is None:
             return
         
-        # Fixed: Proper zip without mask variable
         for xyxy, conf, class_id, tracker_id in zip(
             tracked_detections.xyxy,
             tracked_detections.confidence,
@@ -285,6 +334,7 @@ class ObjectTracking:
                 self.last_lpr_frame[tracker_id] = frame_index
                 self.lpr_attempts[tracker_id] = self.lpr_attempts.get(tracker_id, 0) + 1
                 
+                # 1. Crop vehicle
                 x1, y1, x2, y2 = map(int, xyxy)
                 pad = 10
                 x1, y1 = max(0, x1 - pad), max(0, y1 - pad)
@@ -293,36 +343,45 @@ class ObjectTracking:
                 vehicle_crop = frame[y1:y2, x1:x2]
                 if vehicle_crop.size == 0:
                     continue
-
+                    
+                # 2. Detect license plate
                 lp_results = self.lp_model(vehicle_crop, verbose=False)[0]
                 lp_detections = sv.Detections.from_ultralytics(lp_results)
                 lp_detections = lp_detections[lp_detections.confidence > self.LP_CONF_THRESHOLD]
-
+                
+                print(f"[DEBUG] Frame {frame_index} - Tracker {tracker_id}: Đang tìm biển số...")
+                print(f"  > Đã tìm thấy {len(lp_detections)} biển số với conf > {self.LP_CONF_THRESHOLD}")
+                
                 if len(lp_detections) > 0:
+                    # 3. Get best plate
                     best_idx = np.argmax(lp_detections.confidence)
-                    lx1, ly1, lx2, ly2 = map(int, lp_detections.xyxy[best_idx])
+                    relative_lp_box = lp_detections.xyxy[best_idx]
+                    
+                    lx1, ly1, lx2, ly2 = map(int, relative_lp_box)
                     
                     lp_crop = vehicle_crop[ly1:ly2, lx1:lx2]
                     if lp_crop.size == 0:
                         continue
+                        
+                    os.makedirs("debug_lpr", exist_ok=True)
+                    cv2.imwrite(f"debug_lpr/frame{frame_index}_tracker{tracker_id}_lp_crop.jpg", lp_crop)
                     
-                    processed_plate = self._preprocess_plate_image(lp_crop)
+                    print(f"    [IMG DEBUG] Original plate size: {lp_crop.shape}")
                     
+                    # 4. Run OCR
                     try:
-                        ocr_result1 = self.ocr.predict(lp_crop)
-                    except Exception:
+                        ocr_result1 = self.ocr.ocr(lp_crop)
+                        print(f"    [OCR DEBUG 1] Raw result from original: {ocr_result1}")
+                    except Exception as e:
+                        print(f"    [OCR ERROR 1] {e}")
                         ocr_result1 = None
                     
-                    try:
-                        ocr_result2 = self.ocr.predict(processed_plate)
-                    except Exception:
-                        ocr_result2 = None
+                    # 5. Clean text
+                    plate_text = self._clean_ocr_text(ocr_result1) if ocr_result1 else ""
                     
-                    plate_text1 = self._clean_ocr_text(ocr_result1) if ocr_result1 else ""
-                    plate_text2 = self._clean_ocr_text(ocr_result2) if ocr_result2 else ""
+                    print(f"    > Tracker {tracker_id} - OCR Đọc được (Raw): '{plate_text}'")
                     
-                    plate_text = plate_text1 if len(plate_text1) >= len(plate_text2) else plate_text2
-                    
+                    # 6. Check Consensus
                     if plate_text and len(plate_text) >= 4:
                         if tracker_id not in self.plate_candidates:
                             self.plate_candidates[tracker_id] = []
@@ -332,6 +391,17 @@ class ObjectTracking:
                         if consensus:
                             self.plate_texts[tracker_id] = consensus
                             print(f"✓ Frame {frame_index}: Vehicle #{tracker_id} -> Plate: {consensus}")
+                            
+                            # --- NEW: Save absolute LP box coordinates ---
+                            # Convert relative LP box (on vehicle_crop) to absolute (on frame)
+                            # x1, y1 are the top-left of the vehicle_crop
+                            abs_lp_box = [
+                                relative_lp_box[0] + x1,
+                                relative_lp_box[1] + y1,
+                                relative_lp_box[2] + x1,
+                                relative_lp_box[3] + y1
+                            ]
+                            self.lp_boxes[tracker_id] = np.array(abs_lp_box)
             
             except Exception as e:
                 print(f"Error processing LPR for tracker {tracker_id}: {e}")
@@ -347,6 +417,7 @@ class ObjectTracking:
                 tracked_detections.tracker_id
             ):
                 vehicle_name = self.CLASS_NAMES_DICT.get(class_id, "Unknown")
+                # Get the FINAL confirmed plate text
                 plate_text = self.plate_texts.get(tracker_id)
                 
                 if plate_text:
@@ -355,14 +426,41 @@ class ObjectTracking:
                     label = f"#{tracker_id} {vehicle_name.upper()}"
                 labels.append(label)
 
+            # Annotate vehicle traces and boxes
             frame = self.trace_annotator.annotate(scene=frame, detections=tracked_detections)
             frame = self.box_annotator.annotate(scene=frame, detections=tracked_detections)
             frame = self.label_annotator.annotate(
                 scene=frame, detections=tracked_detections, labels=labels
             )
         
+        # Annotate statistics panel
         frame = self.draw_statistics(frame, frame_index)
+        
+        # Annotate counting line
         frame = self.line_zone_annotator.annotate(frame, line_counter=self.line_zone)
+        
+        # --- NEW: Annotate License Plates ---
+        # Create a list for LP detections
+        lp_xyxy_list = []
+        lp_label_list = []
+        
+        # Collect all confirmed LP boxes
+        for tracker_id, lp_box in self.lp_boxes.items():
+            # Check if this tracker is still in the current frame
+            if tracker_id in tracked_detections.tracker_id:
+                lp_xyxy_list.append(lp_box)
+                lp_label_list.append(self.plate_texts[tracker_id])
+
+        if lp_xyxy_list:
+            # Create a Detections object for all visible license plates
+            lp_detections = sv.Detections(xyxy=np.array(lp_xyxy_list))
+            
+            # Annotate LP boxes
+            frame = self.lp_box_annotator.annotate(scene=frame, detections=lp_detections)
+            # Annotate LP labels
+            frame = self.lp_label_annotator.annotate(
+                scene=frame, detections=lp_detections, labels=lp_label_list
+            )
         
         return frame
 
@@ -397,19 +495,13 @@ class ObjectTracking:
                     sink.write_frame(frame=result_frame)
                     processed_count += 1
 
-                    if index % 3 == 0:
-                        h, w = result_frame.shape[:2]
-                        display_width = w // 3
-                        display_height = h // 3
-                        
-                        if display_width > 0 and display_height > 0:
-                            display_frame = cv2.resize(result_frame, (display_width, display_height))
-                            cv2.imshow("Vehicle Tracking & LPR (Press 'q' to quit)", display_frame)
-
-                    if cv2.waitKey(1) & 0xFF == ord('q'):
-                        print("\nUser pressed 'q', stopping processing...")
-                        break
-                        
+                    # Remove cv2.imshow for headless processing
+                    # if cv2.waitKey(1) & 0xFF == ord('q'):
+                    #     print("\nUser pressed 'q', stopping processing...")
+                    #     break
+        
+        except KeyboardInterrupt:
+            print("\nUser pressed Ctrl+C, stopping processing...")
         except Exception as e:
             print(f"\nError during processing: {e}")
             import traceback
