@@ -31,3 +31,4 @@ Hệ thống được tổ chức thành các mô-đun xử lý chuyên biệt:
 * **Sinh viên:** Huỳnh Chí Trung - MSSV: N21DCCN191.
 * **Lớp:** E21CQCNTT01-N - Chuyên ngành: Trí tuệ nhân tạo.
 * **Giảng viên hướng dẫn:** ThS. Huỳnh Trung Trụ.
+<img width="1782" height="885" alt="image" src="https://github.com/user-attachments/assets/2c5d1605-0060-4401-9bf1-7f656f2cfcdc" />
