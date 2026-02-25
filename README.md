@@ -1,69 +1,33 @@
-🚗 Intelligent Traffic Monitoring and Automatic Vehicle Counting System
-📝 Giới thiệu
-Dự án tập trung vào việc xây dựng một hệ thống Giám sát Giao thông Thông minh (ITS) có khả năng tự động phát hiện, theo dõi và đếm phương tiện giao thông từ luồng video thời gian thực. Điểm đặc biệt của hệ thống là khả năng nhận diện biển số xe (LPR) tích hợp module hậu xử lý thông minh để giảm thiểu sai sót OCR.
+# 🚗 Intelligent Traffic Monitoring and Automatic Vehicle Counting System
 
-✨ Tính năng nổi bật
+## 📝 Giới thiệu
+[cite_start]Đồ án tốt nghiệp chuyên ngành Trí tuệ nhân tạo (2021-2026). Hệ thống được thiết kế để tự động hóa quy trình giám sát giao thông, bao gồm phát hiện phương tiện, theo dõi quỹ đạo và đếm xe thông minh từ luồng video thực tế.
 
-Phát hiện đa đối tượng: Sử dụng kiến trúc YOLOv11 (phiên bản Nano và Small) để nhận diện phương tiện và biển số với độ chính xác cao.
+## ✨ Tính năng nổi bật
+* [cite_start]**Phát hiện đa đối tượng:** Sử dụng kiến trúc **YOLOv11** (Nano/Small) tối ưu cho tốc độ và độ chính xác.
+* [cite_start]**Theo dõi đối tượng (MOT):** Tích hợp thuật toán **ByteTrack** để duy trì định danh (ID) phương tiện ổn định.
+* [cite_start]**Xử lý bất đồng bộ:** Kiến trúc **Asynchronous Pipeline** giúp tăng hiệu suất xử lý lên 180% so với phương pháp tuần tự.
+* [cite_start]**Hậu xử lý thông minh:** Tự động sửa lỗi OCR dựa trên quy tắc cú pháp biển số xe Việt Nam (ví dụ: sửa nhầm lẫn giữa '8' và 'B').
 
-
-Theo dõi đối tượng (MOT): Tích hợp ByteTrack để duy trì ID phương tiện ổn định, ngay cả khi bị che khuất một phần.
-
-
-Xử lý bất đồng bộ (Asynchronous Pipeline): Kiến trúc đa luồng (multi-threading) với hàng đợi luồng an toàn (thread-safe queues) giúp loại bỏ "nút thắt cổ chai" khi chạy các mô hình OCR nặng.
-
-
-Hậu xử lý thông minh (Smart Heuristics): Module sửa lỗi dựa trên quy tắc cú pháp biển số xe Việt Nam (ví dụ: tự động sửa lỗi nhầm lẫn giữa '8' và 'B').
-
-🏗 Kiến trúc hệ thống
-Hệ thống được thiết kế theo dạng pipeline bất đồng bộ để tối ưu hóa hiệu suất:
-
-Mô-đun Phát hiện: YOLOv11 thực hiện nhận diện phương tiện và vùng chứa biển số.
-
-Mô-đun Theo dõi: ByteTrack gán ID và theo dõi quỹ đạo di chuyển của xe.
+## 🏗 Kiến trúc hệ thống
+Hệ thống được tổ chức thành các mô-đun xử lý chuyên biệt:
+1. [cite_start]**Mô-đun Detection:** Nhận diện phương tiện và vị trí biển số xe.
+2. [cite_start]**Mô-đun Tracking:** Theo dõi hành vi và gán ID duy nhất cho mỗi xe qua các khung hình.
+3. [cite_start]**Mô-đun OCR & Counting:** Nhận dạng ký tự biển số và đếm xe dựa trên vạch ranh giới ảo.
 
 
-Mô-đun LPR (License Plate Recognition): Sử dụng PaddleOCR kết hợp với logic căn chỉnh vùng nhìn để trích xuất ký tự.
 
-Mô-đun Phân tích: Đếm xe tự động dựa trên vạch ranh giới ảo và lưu trữ kết quả.
+## 🛠 Công nghệ sử dụng
+* [cite_start]**Mô hình AI:** YOLOv11 (Ultralytics), ByteTrack, PaddleOCR.
+* [cite_start]**Ngôn ngữ & Thư viện:** Python 3.8.10, OpenCV, NumPy, Pandas.
+* [cite_start]**Phần cứng thử nghiệm:** NVIDIA Tesla T4 GPU (16GB VRAM).
 
-🛠 Tech Stack
+## 📊 Kết quả thực nghiệm
+* [cite_start]**Tốc độ xử lý:** Đạt **18.2 FPS** trên luồng dữ liệu thực tế (tăng từ 6.5 FPS ban đầu).
+* [cite_start]**Độ chính xác:** mAP@0.5 cho nhận diện phương tiện đạt **77.12%**.
+* [cite_start]**Tối ưu hóa:** Giảm tải hệ thống 60% nhờ thuật toán **"Smart Stop"** (ngừng xử lý vùng biển số khi đã đạt độ tin cậy).
 
-Ngôn ngữ: Python 3.8.10.
-
-
-Framework AI: Ultralytics YOLOv11, ByteTrack, PaddleOCR.
-
-
-Thư viện bổ trợ: OpenCV, NumPy, Matplotlib, Pandas, Scikit-learn.
-
-
-Hạ tầng: Docker, Tesla T4 GPU (16GB VRAM).
-
-📊 Kết quả thực nghiệm
-Hệ thống đã đạt được những con số ấn tượng trong môi trường thử nghiệm:
-
-
-Hiệu năng xử lý: Tăng tốc độ khung hình từ 6.5 FPS (tuần tự) lên 18.2 FPS (bất đồng bộ) — tăng trưởng 180% throughput.
-
-
-Tối ưu tài nguyên: Giảm tải CPU/GPU lên tới 60% nhờ giải thuật "Smart Stop" (dừng xử lý khi biển số đã được xác nhận).
-
-Độ chính xác:
-
-mAP@0.5 cho nhận diện phương tiện đạt 77.12%.
-
-Độ chính xác nhận diện biển số (LPR) đạt mức tin cậy cao nhờ module hậu xử lý.
-
-🚀 Hướng phát triển
-Tích hợp nhận diện hành vi vi phạm giao thông (vượt đèn đỏ, lấn làn).
-
-Triển khai mô hình trên các thiết bị Edge (NVIDIA Jetson) để giám sát tại chỗ.
-
-Nâng cấp lên kiến trúc Transformer-based để tăng độ chính xác trong điều kiện ánh sáng yếu.
-
-👥 Tác giả
-
-Huỳnh Chí Trung - Sinh viên ngành Trí tuệ Nhân tạo, PTIT.
-
-Ths. Huỳnh Trung Trụ - Giảng viên hướng dẫn.
+## 👥 Thông tin tác giả
+* [cite_start]**Sinh viên:** Huỳnh Chí Trung - MSSV: N21DCCN191.
+* [cite_start]**Lớp:** E21CQCNTT01-N - Chuyên ngành: Trí tuệ nhân tạo.
+* **Giảng viên hướng dẫn:** ThS. [cite_start]Huỳnh Trung Trụ.
